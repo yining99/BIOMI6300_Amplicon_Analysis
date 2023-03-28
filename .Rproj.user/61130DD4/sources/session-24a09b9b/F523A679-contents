@@ -1,0 +1,42 @@
+---
+title: "DADA2 Workflow"
+author: "Mel"
+date: "2023-03-07"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Loading packages
+```{r}
+setwd("/workdir/BIOMI6300_Amplicon_Analysis")
+
+# load packages
+#install.packages("pacman")
+pacman::p_load(dada2, tidyverse, phyloseq, patchwork)
+packageVersion("dada2")
+# OR
+#install.packages("dada2")
+library("dada2")
+
+# if struggling, try downloading from source:
+library("devtools")
+devtools::install_github("benjjneb/dada2")
+packageVersion("dada2")
+```
+
+# Set the path to the seq files
+```{r}
+# Set path to the gzipped files
+path <- "data/sequencing"
+path
+
+# What files do we have?
+
+
+```
+

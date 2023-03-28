@@ -1,0 +1,121 @@
+---
+title: "Phyloseq Pre-Processing"
+author: "Yining Sun"
+date: "2023-03-28"
+output: html_document
+---
+
+# Goals of our Pre-Processing File
+
+We will work here tin this document to remove any unnecessay ASVs or samples, such as:
+
+1. Mitochondria ASVs
+2. Chloroplast ASVs
+3a. ASVs found in the controls
+3b Controls
+4. Mock ASVs/Mock Community
+
+
+## Load packages and Functions
+```{r load packages-functions}
+# set wd
+setwd("/local/workdir/ys636/BIOMI6300_Amplicon_Analysis")
+
+# load packages
+pacman::p_load(tidyverse, phyloseq, install = FALSE)
+
+# source functions
+source("code/functions.R")
+
+```
+
+
+## Load the data
+```{r load-data}
+
+# load in the raw_physeq data from DADA2 Practice.Rmd
+load("/local/workdir/ys636/BIOMI6300_Amplicon_Analysis/data/raw_physeq.RData")
+
+# Take a look at the S4 object
+raw_physeq
+
+# Tell us about your phyloseq
+str(raw_physeq)
+typeof(raw_physeq)
+
+View(raw_physeq@otu_table)
+View(raw_physeq@tax_table)
+View(data.frame(sample_data(raw_physeq)))
+
+```
+
+
+# Remove unnecessary taxa
+```{r rm-ASVs}
+
+# 1. Mitochondria ASVs
+# 2. Chloroplast ASVs
+# 3a. ASVs found in the controls
+# 3b Controls
+# 4. Mock ASVs/Mock Community
+
+# test_physeq <-
+  # raw_physeq %>% 
+   ## remove the mitochondria ASVs
+  # subset_taxa(Family != "Mitochondria") %>%
+   ## remove the chloroplast ASVs
+  # subset_taxa(Order != "Chloroplast")
+
+
+raw_physeq %>%
+  subset_taxa(Family != "Mitochondria") %>%
+  subset_taxa(Order != "Chloroplast") %>%
+  prune_samples((sample_names(.)) %!in% c("CJ-V08-P", "MockZyomPos"), .) %>%
+  # now we will remove any ASVs of count 0
+  prune_taxa(taxa_sums(.) > 0, .)
+  
+
+noMitoChloroCJMock_physeq
+
+# how many taxa have we removed so far?
+num_ASVs_rm <- ntaxa(raw_physeq) - ntaxa(noMitoChloroCJMock_physeq)
+# proportion
+prop_ASVs_rm <- ntaxa(raw_physeq)/ntaxa(noMitoChloroCJMock_physeq)
+
+```
+
+
+Methods:
+ 
+Mitochondria, chloroplasts, and mock community were removed resulting in the loss of `r 1-prop_ASV_rm`% of the data
+
+
+## Remove control samples
+```{r}
+# 3b. Control samples
+
+# create a vector with the control samples
+control_samples <- c("WaterControl", "022um_Control", "3um-Control", "DNA-Ext-Control")
+
+# what taxa are in the control samples?
+noMitoChloroCJMock_physeq %>%
+  # identify control samples
+  subset_samples(., (names %!in% control_samples)) %>%
+  # make sure to remove the ASVs that were not in the controls
+  prune_taxa(taxa_sums(.) > 0, .)
+
+control_physeq %>%
+  plot_bar(., "ASV", fill - "ASV")
+
+
+
+# control ASVs
+control_ASVs <- data.frame(control_physeq@tax_table)$ASV
+
+View(control_physeq@tax_table)
+
+
+```
+
+
+

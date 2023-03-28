@@ -1,0 +1,383 @@
+---
+title: "DADA2 Practice"
+author: "Yining Sun"
+date: "2023-03-16"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+
+
+
+# loading packages
+```{r}
+#Be in the right place
+setwd("/local/workdir/ys636/BIOMI6300_Amplicon_Analysis")
+
+source("code/functions.R")
+```
+
+
+```{r}
+packageVersion("dada2")
+```
+
+```{r}
+#Set path to the gzipped files
+path <- "data/sequencing"
+path
+```
+
+```{r}
+#What files do we have?
+list.files(path)
+```
+
+```{r}
+#Create variable for the forward and the reverse reads
+#R1 is forward, R2 is reverse
+#Forward Read variable, then enter"forward_reads" to get the result.
+forward_reads <- sort(list.files(path, pattern = "_L001_R1_001.fastq.gz",
+                                 full.names = TRUE))
+#Reverse read variable, same, then enter"reverse_reads" to print out the results.
+reverse_reads <- sort(list.files(path, pattern = "_L001_R2_001.fastq.gz",
+                                 full.names = TRUE))
+```
+
+```{r}
+pacman::p_load(dada2, tidyverse, phyloseq, patchwork, Biostrings, install = FALSE)
+```
+
+```{r}
+# Show the quality of each base on the reads of the first 4 samples (forward reads):
+forwardQual4_plot <- plotQualityProfile(forward_reads[1:4])
+forwardQual4_plot
+# and for the reverse reads:
+reverseQual4_plot <- plotQualityProfile(reverse_reads[1:4])
+reverseQual4_plot
+```
+
+
+```{r}
+samples <- scan(file = "data/samples.txt", what = "character")
+samples
+```
+
+```{r}
+#Create a variable holding file names for the forward and reverse filtered reads
+filtered_forward_reads <- file.path(path, "filtered", paste0(samples, "_R1_filtered.fastq.gz"))
+filtered_reverse_reads <- file.path(path, "filtered", paste0(samples, "_R2_filtered.fastq.gz"))
+# note, at this point the folder doesn't show in the directory
+```
+
+
+
+```{r filter-trim}
+filtered_out <- filterAndTrim(forward_reads, filtered_forward_reads, 
+                              reverse_reads, filtered_reverse_reads,
+                              truncLen = c(163, 147), trimLeft = c(19, 20),
+                              maxN = 0, maxEE = c(1,1), truncQ = 2, 
+                              rm.phix = TRUE, compress = TRUE, 
+                              multithread = TRUE)
+```
+
+```{r}
+# Show the quality of each base on the reads of the first 4 samples (forward reads):
+filtered_forwardQual4_plot <- plotQualityProfile(filtered_forward_reads[1:4])
+filtered_forwardQual4_plot
+# and for the reverse reads:
+filtered_reverseQual4_plot <- plotQualityProfile(filtered_reverse_reads[1:4])
+filtered_reverseQual4_plot
+```
+
+```{r filter-trim}
+(forwardQual4_plot+reverseQual4_plot)/(filtered_forwardQual4_plot+filtered_reverseQual4_plot)
+
+```
+
+```{r learn-errors}
+# learn errors
+err_forward_reads <- learnErrors(filtered_forward_reads, multithread = TRUE)
+err_reverse_reads <- learnErrors(filtered_reverse_reads, multithread = TRUE)
+```
+
+```{r}
+# Plot the errors
+plotErrors(err_forward_reads, nominalQ = TRUE)
+plotErrors(err_reverse_reads, nominalQ = TRUE)
+```
+
+# inferring ASVs on the forward and reverse seqs
+```{r}
+# run dada2 on the forward seqs
+dada_forward <- dada(filtered_forward_reads, err = err_forward_reads, multithread =  TRUE)
+type(dada_forward)
+dada_forward
+
+# access specific sample
+#dada_forward$`20211005-MA...`
+
+# run dada2 on the reverse seqs
+dada_reverse <- dada(filtered_reverse_reads, err = err_reverse_reads, multithread = TRUE)
+dada_reverse[1]
+dada_reverse[30]
+```
+
+
+# merge forward and reverse ASVs
+```{r merge-FandR-ASVs}
+# merge the forward ASVs and the reverse ASVs
+merged_amplicons <- mergePairs(dada_forward, filtered_forward_reads,
+                               dada_reverse, filtered_reverse_reads,
+                               verbose = TRUE)
+
+# evaluate the output
+typeof(merged_amplicons)
+merged_amplicons
+length(merged_amplicons)
+names(merged_amplicons)
+
+merged_amplicons[30]
+```
+
+# generate a count table
+```{r}
+seqtab <- makeSequenceTable(merged_amplicons)
+class(seqtab)
+typeof(seqtab)
+dim(seqtab)
+View(seqtab)
+
+# inspect the distribution of sequence lengths of all ASVs in dataset
+table(nchar(getSequences(seqtab)))
+```
+
+
+I have `r ncol(seqtab)` ASVs in the dataset!
+
+# check and remove for Chimeras (Bimeras)
+```{r check-chimeras}
+# idetiyfy and remove chimeras
+seqtab_nochim <- removeBimeraDenovo(seqtab, verbose = TRUE)  # 603 chimeras removed
+
+# what proportion of counts were removed?
+chim_check <- sum(seqtab_nochim)/sum(seqtab) # 0.97725445
+frac_removed <- (1-chim_check)*100
+frac_removed
+
+```
+
+
+
+# track the sequences through the pipeline
+```{r}
+# generate a little function to identify number seqs
+getN <- function(x) sum(getUniques(x))
+
+# make the table to check the seqs
+track <- cbind(filtered_out,
+               sapply(dada_forward, getN),
+               sapply(dada_reverse, getN),
+               sapply(merged_amplicons, getN),
+               rowSums(seqtab_nochim))
+
+head(track)
+
+# change column names
+colnames(track) <- c("input", "filtered", "denoisedF", "denoisedR", "merged", "nochim")
+
+head(track)
+
+rownames(track) <- samples
+
+track
+
+
+# generate a plot to track the reads through our DADA2 pipeline
+track %>%
+  # make it a dataframe
+  as.data.frame() %>%
+  rownames_to_column(var = "names") %>%
+  pivot_longer(input:nochim, names_to = "read_type", values_to = "num_reads") %>%
+  make_MA_metadata() %>%
+  mutate(read_type = fct_relevel(read_type, "input", "filtered", "denoisedF", "denoisedR",
+                                 "merged", "nochim")) %>%
+  ggplot(aes(x = read_type, y = num_reads, fill = read_type)) + 
+  facet_grid(~fraction) +
+  geom_line(aes(group = names), color = "red") +
+  geom_point(shape = 21, size = 3, alpha = 0.8) +
+  scale_fill_brewer(palette = "Spectral") +
+  theme_bw() +
+  labs(x = "Filtering Step", y = "Number of Sequences") +
+  theme(legend.position = "bottom", legend.title = element_blank(),
+        axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
+        
+```
+
+
+# assign taxonomy
+```{r assign tax}
+taxa <- assignTaxonomy(seqtab_nochim, "/workdir/in_class_data/taxonomy/silva_nr99_v138.1_train_set.fa.gz", multithread=TRUE)
+
+# the next line took 3 minutes 
+taxa <- addSpecies(taxa, "/workdir/in_class_data/taxonomy/silva_species_assignment_v138.1.fa.gz")
+
+# Inspect the taxonomy 
+taxa_print <- taxa # Removing sequence rownames for display only
+rownames(taxa_print) <- NULL
+View(taxa_print)
+```
+
+# evaluate accuracy
+```{r eval-accuracy}
+
+View(seqtab_nochim)
+
+# check the mock community
+mock_sample <- seqtab_nochim["MockZymoPos_S84_R1_filtered.fastq.gz",]
+length(mock_sample)
+
+
+# drop ASVs absent from mock community
+length(mock_sample[mock_sample > 0])
+
+mock_sample_sub <- sort(mock_sample[mock_sample > 0], decreasing = TRUE)
+length(mock_sample_sub)
+
+cat("dada2 inferred", length(mock_sample_sub), "ASVs present in the Mock Community")
+
+# who are they in the mock community
+View(taxa[row.names(taxa) %in% names(mock_sample_sub),])
+
+#### compare our ASVs from the mock community to the reference fasta
+mock_reference <- getSequences(file.path("/workdir/in_class_data/", "mock_community.fasta"))
+
+match_mock_ref <- sum(sapply(names(mock_sample_sub),
+                             function(x) any(grepl(x, mock_reference))))
+
+match_mock_ref
+
+cat(sum(match_mock_ref), "ASVs were exact matches to the expected reference sequences.")
+```
+
+
+# prepare the data for export
+
+## 1. ASV Table
+```{r prepare-ASV-table}
+# prep the asv table
+samples_out <- rownames(seqtab_nochim)
+
+# pull out sample names from the file name
+sample_names_reformatted <- sapply(strsplit(samples_out, split = "_"), `[`, 1)
+
+# replace the names in our seqtable
+rownames(seqtab_nochim) <- sample_names_reformatted
+
+View(seqtab_nochim)
+
+### intuition check
+stopifnot(rownames(seqtab_nochim) == sample_names_reformatted)
+
+################. modify the ASV names and then save a fasta file
+# give headers more manageable names
+# first pull the ASV sequences
+asv_seqs <- colnames(seqtab_nochim)
+
+# make headers for our seq fasta file, which will be our asv ames
+asv_headers <- vector(dim(seqtab_nochim)[2], mode = "character")
+
+# loop through vector and fill it in with ASV names
+for (i in 1:dim(seqtab_nochim)[2]) {
+  asv_headers[i] <- paste(">ASV", i, sep = "_")
+}
+
+# intuition check
+asv_headers
+
+
+### renmae ASVs in table and then write out out ASV fasta file
+View(seqtab_nochim)
+
+asv_tab <- t(seqtab_nochim)
+View(asv_tab)
+
+# rename ASVs
+row.names(asv_tab) <- sub(">", "", asv_headers)
+View(asv_tab)
+
+# write the count table to a file
+write.table(asv_tab, "data/ASV_counts.tsv", sep = "\t", quote = FALSE, col.names = NA)
+
+# write out the fasta file for reference later on for what seq matches what ASV
+asv_fasta <- c(rbind(asv_headers, asv_seqs))
+
+# save to a file
+write(asv_fasta, "data/ASV.fasta")
+
+```
+
+
+## 2. taxonomy table
+```{r prep-taxonomy-tab}
+View(taxa)
+
+#### prep taxonomy table
+# add ASV seqs from the rownames to a column
+new_tax_tab <- taxa %>%
+  as.data.frame() %>%
+  rownames_to_column(var = "ASVseqs")
+head(new_tax_tab)
+
+# intuition check
+stopifnot(new_tax_tab$ASVseqs == colnames(seqtab_nochim))
+
+# add the ASV names
+rownames(new_tax_tab) <- rownames(asv_tab)
+View(new_tax_tab)
+
+### final prep of tax table, add new column with ASV names
+asv_tax <- 
+  new_tax_tab %>%
+  # add rownames from count table for phyloseq handoff
+  mutate(ASV = rownames(asv_tab)) %>%
+  # resort the columns with select
+  dplyr::select(Kingdom, Phylum, Class, Order, Family, Genus, Species, ASV, ASVseqs)
+
+View(asv_tax)
+
+# intuition check 
+stopifnot(asv_tax$ASV == rownames(asv_tax), rownames(asv_tax) == rownames(asv_tab))
+
+# write the table
+write.table(asv_tax, "data/ASV_taxonomy.tsv", sep = "\t", quote = FALSE, col.names = NA)
+
+```
+
+
+## 3. metadata
+```{r metadata-prep}
+# read in metadata
+metadata <-
+  read.csv("data/metadata.csv") %>%
+  mutate(X = NULL) %>%
+  # fix typo
+  mutate(Sample_or_Control = droplevels(fct_recode(Sample_or_Control,"True Sample" = " True Sample")))
+
+str(metadata)
+
+# add names to rownames for phyloseq happiness
+rownames(metadata) <- metadata$names
+```
+
+## handoff to phyloseq
+```{r phyloseq-handoff}
+raw_phyloseq <- phyloseq(otu_table(asv_tab, taxa_are_rows =  TRUE),
+                         sample_data(metadata),
+                         tax_table(as.matrix(asv_tax)))
+raw_phyloseq
+
+save(raw_phyloseq, file = paste0("data/raw_physeq.RData"))
+```
+

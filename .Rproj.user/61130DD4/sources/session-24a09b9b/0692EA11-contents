@@ -1,0 +1,16 @@
+---
+title: "Phyloseq Pre-Processing"
+author: "Yining Sun"
+date: "2023-03-28"
+output: html_document
+---
+
+# Goals od our Pre-Processing File
+
+We will work here tin this document to remove any unnecessay ASVs or samples, such as:
+
+1. Mitochondria ASVs
+2. Chloroplast ASVs
+3a. ASVs found in the controls
+3b Controls
+4. Mock ASVs/Mock Community
