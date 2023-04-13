@@ -1,0 +1,91 @@
+---
+title: "Biodiversity analysis"
+author: "Yining Sun"
+date: "2023-04-13"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+# load packages
+```{r}
+install.packages("iNEXT")
+
+# efficiently load packages
+pacman::p_load(phyloseq, iNEXT, tidyverse, install = FALSE)
+
+# load funcions and color preferences
+source("./code/functions.R")
+source("./code/colors_and_shapes.R")
+```
+
+
+# load data
+```{r}
+load("./data/preprocessed_physeq.RData")
+
+preprocessed_physeq
+
+```
+
+
+# run biodiversity analysis
+## work with the iNEXT packages
+```{r iNEXT-div-estimation}
+# prepare data for iNEXT
+iNEXT_input_df <-
+  preprocessed_physeq %>%
+  otu_table() %>%
+  data.frame()
+
+
+# run iNEXT on the data
+# warning: ~ 5 mins to run
+# calculate diversity with iNEXT
+set.seed(0402)
+
+
+# iNEXT_data <- iNEXT(iNEXT_input_df, q = c(0, 1, 2), datatype = "abundance")
+# save(iNEXT_data, file = "./data/iNEXT_MissionAransas.RData")
+
+# q = 0, 1, 2
+# q = 0 -> total number of taxa
+# q = 1 -> number of common taxa, equal to shannon diversity
+# q = 2 -> number of dominant taxa
+
+
+load("./data/iNEXT_MissionAransas.RData")
+# note: the obkect is called "iNEXT_data"
+str(iNEXT_data)
+typeof(iNEXT_data)
+
+
+# make workable df
+div_iNEXT_df <-
+  iNEXT_data$AsyEst %>%
+  dplyr::rename(names = Assemblage) %>%
+  make_MA2_metadata()
+```
+
+
+# plot diversity in samples 
+```{r}
+fraction_colors
+
+# set colors for manual plotting with iNEXT
+background_col_FL <- "goldenrod1"
+background_col_PA <- "firebrick3"
+background_col_WH <- "darkorange2"
+
+###
+
+ggiNEXT(iNEXT_data, type = 1, facet.var = "Order.q") + 
+  facet_wrap(~Order.q, scales = "fixed")
+
+
+
+```
+
+
+
+
