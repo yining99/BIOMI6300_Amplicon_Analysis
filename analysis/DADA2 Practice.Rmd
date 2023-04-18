@@ -80,6 +80,8 @@ filtered_out <- filterAndTrim(forward_reads, filtered_forward_reads,
                               maxN = 0, maxEE = c(1,1), truncQ = 2, 
                               rm.phix = TRUE, compress = TRUE, 
                               multithread = TRUE)
+
+# phiX-> to improve diversity among the reads
 ```
 
 ```{r}
@@ -158,6 +160,10 @@ I have `r ncol(seqtab)` ASVs in the dataset!
 
 # check and remove for Chimeras (Bimeras)
 ```{r check-chimeras}
+
+# what is chimera?
+# mismatches of reads from different ASVs
+
 # idetiyfy and remove chimeras
 seqtab_nochim <- removeBimeraDenovo(seqtab, verbose = TRUE).  # 603 chimeras removed
 
@@ -235,6 +241,10 @@ View(taxa_print)
 ```{r eval-accuracy}
 
 View(seqtab_nochim)
+
+
+# mock community
+# for PCR, it is the positive control
 
 # check the mock community
 mock_sample <- seqtab_nochim["MockZymoPos_S84_R1_filtered.fastq.gz",]

@@ -68,22 +68,119 @@ div_iNEXT_df <-
 ```
 
 
-# plot diversity in samples 
+# plot diversity in samples
 ```{r}
 fraction_colors
 
-# set colors for manual plotting with iNEXT
+# Set colors for manual plotting with iNEXT
 background_col_FL <- "goldenrod1"
 background_col_PA <- "firebrick3"
 background_col_WH <- "darkorange2"
 
 ###
+# Prepare data to color the figure for iNEXT
+dat <- colnames(iNEXT_input_df) %>%    
+  data.frame() 
 
-ggiNEXT(iNEXT_data, type = 1, facet.var = "Order.q") + 
-  facet_wrap(~Order.q, scales = "fixed")
+colnames(dat)[1] <- "names"     
+
+sub_metadata <- dat %>% make_MA2_metadata()
+
+# Add the colors for the plotting!
+dat_iNEXT <- dat %>%      
+  left_join(sub_metadata, by = "names") %>%    
+  mutate(fraction_color = ifelse(fraction == "Particle", background_col_PA,                                  ifelse(fraction == "Free", background_col_FL,                                        background_col_WH)))
+
+# Now plot it all :) 
+# Plot the rarefaction/extrapolation curve (type = 1)
+rarefaction_fixed_plot <-   ggiNEXT(iNEXT_data, type=1, facet.var="Order.q") +   
+  facet_wrap(~Order.q, scales="fixed") +  
+  scale_color_manual(values = dat_iNEXT$fraction_color,  guide = FALSE) +  
+  scale_fill_manual(values = dat_iNEXT$fraction_color, guide = FALSE) +  
+  theme(legend.position = "none") +   
+  labs(x = "Number of Sequences")
+
+rarefaction_fixed_plot
+
+# Save the file using ggsave()! 
+ggsave(rarefaction_fixed_plot,        
+       filename = "figures/rarefaction_fixed.png",       
+       units = "in", height = 3.5, width = 8)
+```
 
 
 
+# pull out specific samples and plot it
+```{r}
+# explore the iNEXT object
+str(iNEXT_data)
+
+# pull out information on rarefaction
+str(iNEXT_data$iNextEst$size_based)
+iNEXT_data[[2]][1]
+
+
+# look into the observed diversity values and check them
+obs_rich_df <-
+  iNEXT_data$iNextEst$size_based %>%
+  # extract the richness from the data
+  dplyr::filter(Order.q == 0) %>%
+  dplyr::filter(Method == "Observed") %>%
+  dplyr::rename(names = Assemblage) %>%
+  # rename the X's from the sample names
+  mutate(names = gsub("X", "", names)) %>%
+  make_MA_metadata()
+ 
+
+# manually plot the rarefaction
+iNEXT_data$iNextEst$size_based %>%
+  # extract the richness from the data
+  dplyr::filter(Order.q == 0) %>%
+  dplyr::filter(Method == "Rarefaction") %>%
+  dplyr::rename(names = Assemblage) %>%
+  # rename the X's from the sample names
+  mutate(names = gsub("X", "", names)) %>%
+  make_MA_metadata() %>%
+  ggplot(aes(x = m, y = qD, color = fraction, group = names)) + 
+  geom_line() + 
+  geom_point(data = obs_rich_df, aes(x = m, y = qD, color = fraction)) +
+  facet_grid(.~fraction) +
+  scale_color_manual(values = fraction_colors)
+
+
+## the sequences needed to reach the flatness is called sequence depth, the smaller the sequence depth is, the fewer sequence the sample needed to flat
+
+
+```
+Sample 20210615.MA.ABB2F has a much lower richness compared to all the other smaples, will keep an eye out for this smaple.
+
+
+# completness curve
+```{r}
+
+ggiNEXT(iNEXT_data, type = 2) + 
+  scale_color_manual(values = dat_iNEXT$fraction_color,  guide = FALSE) +  
+  scale_fill_manual(values = dat_iNEXT$fraction_color, guide = FALSE) +  
+  # zoom in
+  scale_x_continuous(limit = c(0, 2000)) +
+  theme(legend.position = "none") 
+
+
+```
+
+
+# box plot
+```{r boxplot-div}
+
+obs_rich_df %>%
+  ggplot(aes(x = fraction, y = qD, color = fraction)) +
+  geom_jitter(size = 2.5) +
+  geom_boxplot(aes(fill = fraction), alpha = 0.5, outlier.shape = NA) +
+  scale_fill_manual(values = fraction_colors) +
+  scale_color_manual(values = fraction_colors)
+
+
+install.packages("ggpubr")
 ```
 
 
