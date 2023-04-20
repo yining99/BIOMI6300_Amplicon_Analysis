@@ -9,12 +9,14 @@ editor_options:
 
 # load packages
 ```{r}
-install.packages("iNEXT")
+# install.packages("iNEXT")
+
+# install.packages("ggpubr") this package has function that can do statistical tests in ggplot
 
 # efficiently load packages
-pacman::p_load(phyloseq, iNEXT, tidyverse, install = FALSE)
+pacman::p_load(phyloseq, iNEXT, ggpubr, tidyverse, install = FALSE)
 
-# load funcions and color preferences
+# load functions and color preferences
 source("./code/functions.R")
 source("./code/colors_and_shapes.R")
 ```
@@ -169,20 +171,34 @@ ggiNEXT(iNEXT_data, type = 2) +
 ```
 
 
-# box plot
+# boxplot of diversity
 ```{r boxplot-div}
 
+iNEXT_data$AsyEst %>%
+  head()
+
 obs_rich_df %>%
-  ggplot(aes(x = fraction, y = qD, color = fraction)) +
+  dplyr::filter(fraction == "Whole") %>%
+  ggplot(aes(x = station, y = qD, color = station)) +
   geom_jitter(size = 2.5) +
-  geom_boxplot(aes(fill = fraction), alpha = 0.5, outlier.shape = NA) +
-  scale_fill_manual(values = fraction_colors) +
-  scale_color_manual(values = fraction_colors)
+  geom_boxplot(aes(fill = station), alpha = 0.5, outlier.shape = NA) +
+  scale_fill_manual(values = station_colors) +
+  scale_color_manual(values = station_colors) +
+  theme(axis.text.x = element_text(angle = 30, vjust = 1, hjust = 1)) +
+  stat_kruskal_test()
 
-
-install.packages("ggpubr")
+# Kruskal test
+kruskal.test(qD ~ station, 
+             data = dplyr::filter(obs_rich_df, fraction == "Whole"))
 ```
 
+# tests for sigs
+## multiple comparison:
+### Kruskal-walls (non-parametric, does not require normal distribution)
+### ANOVA (parametric, require normal distribution)
+## two paired samples
+### Wilcoxon (non-parametric)
+### t test (parametric)
 
 
 
