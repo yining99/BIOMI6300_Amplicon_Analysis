@@ -1,10 +1,17 @@
 ---
 title: "Biodiversity analysis"
 author: "Yining Sun"
-date: "2023-04-13"
-output: html_document
+date: "`r format(Sys.time(), '%B %d %Y')`"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 2
+    toc_float: true
+    theme: united
+    highlight: tango
 editor_options: 
   chunk_output_type: console
+  
 ---
 
 # load packages
@@ -200,5 +207,9 @@ kruskal.test(qD ~ station,
 ### Wilcoxon (non-parametric)
 ### t test (parametric)
 
+# session information
+```{r session_info}
+devtools::session_info()
+```
 
 
