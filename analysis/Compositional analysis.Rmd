@@ -16,7 +16,7 @@ editor_options:
 # load packages
 ```{r}
 # efficiently load packages
-pacman::p_load(phyloseq, iNEXT, ggpubr, tidyverse, install = FALSE)
+pacman::p_load(phyloseq, iNEXT, ggpubr, tidyverse, vegan, install = FALSE)
 
 # be in the right place
 setwd("/local/workdir/ys636/BIOMI6300_Amplicon_Analysis")
@@ -95,24 +95,107 @@ rownames_to_column(., var = "names") %>%
 # PCoA
 ```{r}
 # calculate Bray-curtis Dissimilarity
-scaled_BCpcao <-
+scaled_BC_pcoa <-
   ordinate(
     physeq = scaled_physeq2267,
     method = "PCoA",
-    distance = "bray"
+    distance = "bray",
+    binary = FALSE
   )
+
+# ordiate-measures some distance
 
 
 # plot the PCoA
 plot_ordination(
   physeq = scaled_physeq2267, 
-  ordination = sclaed_BC_pcoa,
+  ordination = scaled_BC_pcoa,
   color = "fraciton",
   shape = "fraction",
-  title = "Scaled bray-Curtis PCoA") +
-  geom_point(size = 5, alpha = 05, aes(color = fraction)) +
+  title = "Scaled Bray-Curtis PCoA") +
+  geom_point(size = 5, alpha = 0.5, aes(color = fraction)) +
   scale_color_manual(values = fraction_colors)
+
+
+# plot the PCoA
+plot_ordination(
+  physeq = scaled_physeq2267, 
+  ordination = scaled_BC_pcoa,
+  color = "station",
+  shape = "station",
+  title = "Scaled Bray-Curtis PCoA") +
+  geom_point(size = 5, alpha = 0.5, aes(color = station)) +
+  scale_color_manual(values = station_colors)
+
+
+## both x-axis and y-axis represent eigen values
 
 ```
 
+
+# stats
+# check for difference in the cummunities using PERMANOVA
+```{r permanova}
+# calculate bray curtis for permanova
+scaled_bray <- phyloseq::distance(scaled_physeq2267, method = "bray", binary = FALSE)
+
+# pull out metadata
+metadata <- scaled_physeq2267 %>%
+  sample_data() %>%
+  data.frame()
+
+
+# permutational multivariate analysis of variance using distance matrices
+# aka PERMANOVA using the adonis2 function form vegan
+# test the hypothesis that the fraction centroids are different using the bray curtis
+# test if the centroids of the fractions are different
+adonis2(scaled_bray ~ fraction, data = metadata)
+
+
+# are th ecentroids different for stations based on bray curtis
+adonis2(scaled_bray ~ station, data = metadata)
+### station explained around 40% of the data 
+
+
+# date
+adonis2(scaled_bray ~ date, data = metadata) # missing value
+
+# are they independent of each other?
+adonis2(scaled_bray ~ station + fraction, data = metadata)
+
+# is there an interaction between the variables?
+adonis2(scaled_bray ~ station * fraction, data = metadata)
+
+
+```
+
+
+
+# homogeniety of dispersion test: beta disper
+```{r}
+# dispersion between stations
+betadispr_station <- betadisper(scaled_bray, metadata$station)
+permutest((betadispr_station))
+
+```
+
+# compositional analysis
+```{r}
+phylum_df <- 
+  scaled_physeq2267 %>%
+  tax_glom(taxrank = "Phylum") %>% # agglomerate/merge counts by phylum
+  transform_sample_counts(function(x) {x/sum(x)}) %>% # transform to relative abundances
+  psmelt() %>%         # melt into long format dataframe
+  dplyr::filter(Abundance > 0.01)    # filter out phyla that are > 1% abundant
+       
+# plot the phylum distributions
+phylum_df %>%
+  dplyr::filter(depth == "S") %>%
+  ggplot(aes(x = fraction, y = Abundance, fill = Phylum)) +
+  geom_bar(stat = "identity", color = "black") +
+  facet_grid(~station) +
+  scale_fill_manual(values = phylum_colors)
+
+
+```
 
